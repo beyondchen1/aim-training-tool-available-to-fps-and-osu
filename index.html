@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>瞄准工坊 · 灵敏度测试与训练</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23E5484D' stroke-width='2'/%3E%3Cpath d='M12 3v18M3 12h18' stroke='%23E5484D' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='2' fill='%23E5484D'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap">
+<style>
+:root{
+  --bg:#0B1015; --bg2:#0E161F; --card:#121A24; --card2:#17222E;
+  --line:#22303D; --line2:#2C3D4D;
+  --txt:#E7EDF3; --dim:#8CA0B1; --faint:#5E7384;
+  --val:#E5484D; --osu:#F06CB0; --acc:#3ECF8E; --warn:#F0A93D; --info:#4FB3D9;
+  --rad:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:auto}
+body{
+  font-family:'Noto Sans SC',system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
+  background:var(--bg); color:var(--txt); min-height:100vh; line-height:1.6;
+  -webkit-tap-highlight-color:transparent;
+}
+a{color:var(--info);text-decoration:none}
+#app{max-width:1120px;margin:0 auto;padding:0 16px 90px}
+/* ===== 顶栏 ===== */
+header.top{
+  position:sticky;top:0;z-index:50;background:linear-gradient(180deg,rgba(11,16,21,.97),rgba(11,16,21,.92));
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--line);margin:0 -16px 18px;padding:0 16px;
+}
+.brand{display:flex;align-items:center;gap:10px;padding:14px 0 10px}
+.brand .logo{width:34px;height:34px;flex:0 0 auto}
+.brand h1{font-size:20px;font-weight:900;letter-spacing:.5px}
+.brand .tag{font-size:11px;color:var(--dim);font-weight:400}
+nav.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;padding-bottom:10px}
+nav.tabs::-webkit-scrollbar{display:none}
+nav.tabs a{
+  flex:0 0 auto;padding:7px 14px;border-radius:9px;font-size:14px;font-weight:500;color:var(--dim);
+  text-decoration:none;transition:.15s;white-space:nowrap;
+}
+nav.tabs a.on{background:var(--card2);color:var(--txt);box-shadow:inset 0 0 0 1px var(--line2)}
+nav.tabs a .dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.dot.val{background:var(--val)} .dot.osu{background:var(--osu)} .dot.acc{background:var(--acc)}
+/* ===== 通用卡片 ===== */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--rad);padding:20px;margin-bottom:16px}
+.card h2{font-size:18px;font-weight:900;margin-bottom:4px}
+.card h3{font-size:15px;font-weight:700;margin-bottom:8px}
+.sub{color:var(--dim);font-size:13px;margin-bottom:14px}
+.row{display:flex;flex-wrap:wrap;gap:12px}
+.col{flex:1 1 220px;min-width:0}
+.stat{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.stat .k{font-size:12px;color:var(--dim)}
+.stat .v{font-size:26px;font-weight:900;letter-spacing:.5px}
+.stat .u{font-size:13px;color:var(--faint);margin-left:2px}
+.stat .d{font-size:12px;color:var(--acc);margin-top:2px}
+.stat .d.bad{color:var(--warn)}
+/* ===== 按钮 ===== */
+.btn{
+  display:inline-block;background:var(--val);color:#fff;border:none;border-radius:10px;
+  padding:10px 22px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;transition:.15s;
+}
+.btn:hover{filter:brightness(1.12)}
+.btn:active{transform:translateY(1px)}
+.btn.ghost{background:transparent;box-shadow:inset 0 0 0 1px var(--line2);color:var(--txt)}
+.btn.ghost:hover{background:var(--card2)}
+.btn.acc{background:var(--acc);color:#06281A}
+.btn.osu{background:var(--osu);color:#3A0B26}
+.btn[disabled]{opacity:.45;cursor:not-allowed;filter:none}
+.btn.sm{padding:7px 14px;font-size:13px}
+/* ===== 输入 ===== */
+.field{margin-bottom:14px}
+.field label{display:block;font-size:13px;color:var(--dim);margin-bottom:6px;font-weight:500}
+.field input[type=number]{
+  width:100%;background:var(--card2);border:1px solid var(--line2);color:var(--txt);
+  border-radius:10px;padding:10px 12px;font-size:16px;font-family:inherit;outline:none;
+}
+.field input[type=number]:focus{border-color:var(--val);box-shadow:0 0 0 3px rgba(229,72,77,.15)}
+.range{display:flex;align-items:center;gap:12px}
+.range input[type=range]{flex:1;accent-color:var(--val);height:30px}
+.range .rv{font-size:20px;font-weight:900;min-width:52px;text-align:right;color:var(--val)}
+/* ===== 画布 ===== */
+.canvas-wrap{position:relative;background:#070B0F;border:1px solid var(--line2);border-radius:12px;overflow:hidden}
+canvas{display:block;width:100%;height:auto;touch-action:none}
+.canvas-hud{position:absolute;top:10px;left:12px;right:12px;display:flex;justify-content:space-between;gap:10px;pointer-events:none;font-size:12px;color:var(--dim)}
+.canvas-hud b{color:var(--txt)}
+.overlay{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:rgba(7,11,15,.82);gap:10px;text-align:center;padding:20px;z-index:5;
+}
+.overlay h4{font-size:18px;font-weight:900}
+.overlay p{color:var(--dim);font-size:13px;max-width:440px}
+/* ===== 结果条 ===== */
+.bars{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.bar-row{display:grid;grid-template-columns:74px 1fr 64px;align-items:center;gap:10px;font-size:13px}
+.bar-row .nm{color:var(--dim)}
+.bar-row .track{height:10px;background:var(--card2);border-radius:5px;overflow:hidden;position:relative}
+.bar-row .fill{height:100%;border-radius:5px}
+.bar-row .sc{font-weight:900;text-align:right}
+.bar-row.best .nm,.bar-row.best .sc{color:var(--acc)}
+.bar-row.best .fill{background:var(--acc)}
+/* ===== 表格 ===== */
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+table th,table td{padding:9px 10px;text-align:left;font-size:13px;border-bottom:1px solid var(--line)}
+table th{color:var(--dim);font-weight:500;font-size:12px}
+table td b{color:var(--txt)}
+.num{font-variant-numeric:tabular-nums}
+/* ===== 标签 ===== */
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700}
+.pill.val{background:rgba(229,72,77,.15);color:#FF8A8F;box-shadow:inset 0 0 0 1px rgba(229,72,77,.35)}
+.pill.osu{background:rgba(240,108,176,.15);color:#FF9CCB;box-shadow:inset 0 0 0 1px rgba(240,108,176,.35)}
+.pill.acc{background:rgba(62,207,142,.15);color:#7BE0B2;box-shadow:inset 0 0 0 1px rgba(62,207,142,.35)}
+.pill.warn{background:rgba(240,169,61,.15);color:#FFC46B;box-shadow:inset 0 0 0 1px rgba(240,169,61,.35)}
+.pill.info{background:rgba(79,179,217,.15);color:#8FD4EC;box-shadow:inset 0 0 0 1px rgba(79,179,217,.35)}
+/* ===== 首页 hero ===== */
+.hero{padding:34px 4px 22px;text-align:center}
+.hero .big{font-size:clamp(30px,6vw,44px);font-weight:900;letter-spacing:1px;line-height:1.4}
+.hero .big em{display:inline-block}
+.hero .big em{font-style:normal;color:var(--val)}
+.hero .big .o{color:var(--osu)}
+.hero p{color:var(--dim);margin-top:10px;font-size:15px;max-width:620px;margin-inline:auto}
+.grid-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:22px}
+.gcard{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--rad);padding:18px;
+  cursor:pointer;transition:.18s;text-decoration:none;color:inherit;position:relative;overflow:hidden;
+  display:flex;flex-direction:column;
+}
+.gcard:hover{border-color:var(--line2);transform:translateY(-2px);background:var(--card2)}
+.gcard .ic{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+.gcard .t{font-size:16px;font-weight:900}
+.gcard .d{font-size:12.5px;color:var(--dim);margin-top:5px;line-height:1.5;flex:1}
+.gcard .go{margin-top:12px;font-size:18px;color:var(--faint);align-self:flex-end}
+.status-strip{display:flex;flex-wrap:wrap;gap:12px;margin-top:20px;justify-content:center}
+/* ===== 步骤 ===== */
+.steps{display:flex;flex-direction:column;gap:12px;margin:14px 0}
+.step{display:flex;gap:12px;align-items:flex-start}
+.step .n{
+  flex:0 0 26px;height:26px;border-radius:50%;background:var(--card2);border:1px solid var(--line2);
+  display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:var(--dim);
+}
+.step .tx{font-size:13.5px;color:var(--txt)}
+.step .tx small{display:block;color:var(--dim);font-size:12.5px;margin-top:2px}
+/* ===== 角色结果 ===== */
+.role-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.role-icon{width:76px;height:76px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:900;flex:0 0 auto}
+.role-meter{flex:1 1 260px;min-width:0}
+.meter{height:12px;background:var(--card2);border-radius:6px;overflow:hidden;margin:5px 0}
+.meter i{display:block;height:100%;border-radius:6px;transition:width .6s}
+/* ===== 引用 ===== */
+.refs{display:flex;flex-direction:column;gap:10px}
+.ref-item{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--dim)}
+.ref-item b{color:var(--txt);display:block;font-size:13px;margin-bottom:3px}
+.ref-item a{word-break:break-all}
+/* ===== 历史 ===== */
+.hist-item{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center}
+/* ===== toast ===== */
+#toast{
+  position:fixed;left:50%;bottom:84px;transform:translateX(-50%) translateY(16px);z-index:99;
+  background:var(--card2);border:1px solid var(--line2);color:var(--txt);padding:10px 18px;border-radius:10px;
+  font-size:14px;opacity:0;pointer-events:none;transition:.25s;max-width:88vw;box-shadow:0 8px 30px rgba(0,0,0,.4);
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+kbd{
+  display:inline-block;background:var(--card2);border:1px solid var(--line2);border-bottom-width:2px;
+  border-radius:6px;padding:1px 7px;font-size:12.5px;font-family:inherit;color:var(--txt);
+}
+/* ===== 响应式 ===== */
+@media (max-width:900px){
+  .grid-cards{grid-template-columns:repeat(2,1fr)}
+  .stat .v{font-size:22px}
+}
+@media (max-width:640px){
+  #app{padding:0 12px 80px}
+  header.top{margin:0 -12px;padding:0 12px;backdrop-filter:none}
+  nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:60;background:rgba(11,16,21,.97);
+    border-top:1px solid var(--line);padding:8px 10px;margin:0}
+  nav.tabs a{flex:1;text-align:center;padding:8px 6px;font-size:12px}
+  nav.tabs a .dot{display:none}
+  .grid-cards{grid-template-columns:1fr}
+  .card{padding:16px}
+  table th,table td{padding:7px 6px;font-size:12px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.5" stroke="var(--val)" stroke-width="2"/><path d="M12 2v20M2 12h20" stroke="var(--val)" stroke-width="2"/><circle cx="12" cy="12" r="2" fill="var(--val)"/></svg>
+      <div>
+        <h1>瞄准工坊</h1>
+        <div class="tag">灵敏度测试 · 急停训练 · 定位测试</div>
+      </div>
+    </div>
+    <nav class="tabs" id="tabs"></nav>
+  </header>
+  <main id="view"></main>
+  <footer style="text-align:center;color:var(--faint);font-size:12px;padding:18px 0 8px">
+    瞄准工坊 · 网页端训练工具，测试结果仅供个人参考，最终以实战手感为准
+  </footer>
+</div>
+<div id="toast"></div>
+
+<script>
+/* ==================== 基础工具与状态 ==================== */
+const $ = (s,el=document)=>el.querySelector(s);
+const $$ = (s,el=document)=>[...el.querySelectorAll(s)];
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const rand=(a,b)=>a+Math.random()*(b-a);
+const now=()=>performance.now();
+function fmt(n,d=1){ return (+n).toFixed(d); }
+function toast(msg){
+  const t=$('#toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2600);
+}
+const S = {
+  page:'home',
+  profile: loadProfile(),
+  sens:{ current:null, rounds:[], done:false },
+  stop:{ rounds:[], running:false },
+  osu:{ rounds:[], done:false },
+  quiz:{ answers:{}, done:false, result:null },
+};
+function loadProfile(){
+  try{ const p=JSON.parse(localStorage.getItem('aimlab.profile')||'{}');
+    return { dpi:+p.dpi||800, sens:+p.sens||0.3, osuMult:+p.osuMult||1.0, name:p.name||'' }; }
+  catch(e){ return { dpi:800, sens:0.3, osuMult:1.0, name:'' }; }
+}
+function saveProfile(){ try{ localStorage.setItem('aimlab.profile', JSON.stringify(S.profile)); }catch(e){} }
+function loadHistory(){ try{ return JSON.parse(localStorage.getItem('aimlab.history')||'[]'); }catch(e){ return []; } }
+function saveHistory(h){ try{ localStorage.setItem('aimlab.history', JSON.stringify(h.slice(0,12))); }catch(e){} }
+
+/* ===== 灵敏度换算（无畏契约 yaw=0.07） ===== */
+function eDPI(p){ return p.dpi * p.sens; }
+function cm360(edpi){ return 360/(0.07*edpi)*2.54; } // cm per 360°
+function sensAt(edpi,dpi){ return edpi/dpi; }
+function proBand(edpi){
+  if(edpi<160) return {t:'低于职业主流（超慢）',c:'warn',p:6};
+  if(edpi<200) return {t:'职业低敏区',c:'info',p:22};
+  if(edpi<=320) return {t:'职业主流甜点区',c:'acc',p:60};
+  if(edpi<=400) return {t:'职业偏高区',c:'info',p:84};
+  return {t:'高于 90% 职业选手（偏快）',c:'warn',p:95};
+}
+
+/* ==================== 路由 ==================== */
+const TABS = [
+  {id:'home',   t:'首页',  dot:'acc'},
+  {id:'sens',   t:'灵敏度', dot:'val'},
+  {id:'stop',   t:'急停',  dot:'val'},
+  {id:'osu',    t:'osu',   dot:'osu'},
+  {id:'role',   t:'位置',  dot:'info'},
+  {id:'report', t:'报告',  dot:'acc'},
+  {id:'refs',   t:'参考',  dot:''},
+];
+function renderNav(){
+  $('#tabs').innerHTML = TABS.map(t=>
+    `<a href="#/${t.id}" class="${S.page===t.id?'on':''}">${t.dot?`<i class="dot ${t.dot}"></i>`:''}${t.t}</a>`).join('');
+}
+function route(){
+  const h=location.hash.replace(/^#\/?/,'')||'home';
+  S.page = TABS.some(t=>t.id===h) ? h : 'home';
+  renderNav();
+  const v=$('#view');
+  const fn = {home:viewHome, sens:viewSens, stop:viewStop, osu:viewOsu, role:viewRole, report:viewReport, refs:viewRefs}[S.page];
+  v.innerHTML = fn ? fn() : viewHome();
+  (fn&&window['boot_'+S.page]) ? window['boot_'+S.page]() : 0;
+  window.scrollTo({top:0});
+}
+window.addEventListener('hashchange', route);
+
+/* ==================== 首页 ==================== */
+function viewHome(){
+  const p=S.profile, ed=eDPI(p), band=proBand(ed);
+  return `
+  <div class="hero">
+    <div class="big">找到你的<em>最佳灵敏度</em>，<br>练出<em class="o">急停</em>肌肉记忆</div>
+    <p>为无畏契约与 osu! 设计的整套测试流程：多档灵敏度对照试验、急停专项训练、瞄准定位测试，最后汇总成一份可执行的调参报告。</p>
+  </div>
+  <div class="status-strip">
+    <div class="stat"><div class="k">当前 eDPI（DPI×灵敏度）</div><div class="v">${fmt(ed)}<span class="u">edpi</span></div>
+      <div class="d ${band.c==='warn'?'bad':''}">${band.t}</div></div>
+    <div class="stat"><div class="k">当前转身距离</div><div class="v">${fmt(cm360(ed))}<span class="u">cm/360°</span></div>
+      <div class="d">职业典型约 45–51 cm</div></div>
+    <div class="stat"><div class="k">已完成测试</div><div class="v">${loadHistory().length}<span class="u">次</span></div>
+      <div class="d">记录保存在本机</div></div>
+  </div>
+  <div class="grid-cards">
+    <a class="gcard" href="#/sens"><div class="ic" style="background:rgba(229,72,77,.14)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="var(--val)" stroke-width="1.8"/><path d="M12 4v16M4 12h16" stroke="var(--val)" stroke-width="1.4"/><circle cx="12" cy="12" r="1.6" fill="var(--val)"/></svg></div>
+      <div class="t">灵敏度测试</div><div class="d">5 档灵敏度对照试验，结合职业选手 eDPI 数据给出调参方向。</div><span class="go">→</span></a>
+    <a class="gcard" href="#/stop"><div class="ic" style="background:rgba(229,72,77,.14)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M8 8l8 8M16 8l-8 8" stroke="var(--val)" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="var(--val)" stroke-width="1.6"/></svg></div>
+      <div class="t">急停训练</div><div class="d">A/D 移动 + 反向键急停 + 射击，量化你的急停反应与停稳精度。</div><span class="go">→</span></a>
+    <a class="gcard" href="#/osu"><div class="ic" style="background:rgba(240,108,176,.14)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="var(--osu)" stroke-width="1.8"/><circle cx="12" cy="12" r="4.2" stroke="var(--osu)" stroke-width="1.6"/><circle cx="12" cy="12" r="1.2" fill="var(--osu)"/></svg></div>
+      <div class="t">osu! 瞄准测试</div><div class="d">圆圈点击测试对比多档灵敏度，附带屏幕覆盖自检与调参建议。</div><span class="go">→</span></a>
+    <a class="gcard" href="#/role"><div class="ic" style="background:rgba(79,179,217,.14)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 4v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V7l7-4z" stroke="var(--info)" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.5 12l2 2 3.5-4" stroke="var(--info)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="t">位置测试</div><div class="d">12 题定位你的主角色：决斗 / 先锋 / 控场 / 哨兵，附推荐特工。</div><span class="go">→</span></a>
+  </div>
+  <div class="card" style="margin-top:18px">
+    <h2>怎么用</h2>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><div class="tx">在「灵敏度」页输入你现在的 DPI 与游戏内灵敏度，跑完 5 档虚拟靶场试验。<small>推荐用 800 或 1600 DPI，关闭鼠标加速，确保游戏内 raw input / 原始输入开启。</small></div></div>
+      <div class="step"><div class="n">2</div><div class="tx">到「急停」页完成 3 组急停练习，看你的停稳时间与偏差。<small>急停（counter-strafe）是瓦罗兰特对枪基本功。</small></div></div>
+      <div class="step"><div class="n">3</div><div class="tx">到「osu」页跑圆圈测试，找到你点得又快又准的灵敏度档位。<small>osu 不需要低敏打枪，够到全屏、点得准才是关键。</small></div></div>
+      <div class="step"><div class="n">4</div><div class="tx">「位置」测试完成后，在「报告」页查看汇总：推荐 eDPI、换算好的 DPI/灵敏度组合、训练建议。<small>测试数据只存在本机浏览器。</small></div></div>
+    </div>
+  </div>`;
+}
+
+/* 占位锚点：视图模块将在后续追加 */
+/* ==================== 灵敏度测试（无畏契约） ==================== */
+const SENS_MULTS=[0.7,0.85,1.0,1.15,1.3];
+const SENS_R=20, SENS_N=20;
+function viewSens(){
+  const p=S.profile, ed=eDPI(p);
+  return `
+  <div class="card">
+    <h2>输入当前设置</h2>
+    <p class="sub">填你无畏契约里正在用的数值。推荐 800 或 1600 DPI 并关闭系统鼠标加速。</p>
+    <div class="row">
+      <div class="field col" style="flex:1 1 200px"><label>鼠标 DPI</label><input type="number" id="in-dpi" min="50" max="16000" step="50" value="${p.dpi}"></div>
+      <div class="field col" style="flex:1 1 200px"><label>游戏内灵敏度</label><input type="number" id="in-sens" min="0.01" max="5" step="0.01" value="${p.sens}"></div>
+    </div>
+    <div class="row" id="sens-calc">
+      <div class="stat col"><div class="k">eDPI（DPI×灵敏度）</div><div class="v" id="s-ed">${fmt(ed)}</div></div>
+      <div class="stat col"><div class="k">转身 360° 移动距离</div><div class="v" id="s-cm">${fmt(cm360(ed))}<span class="u">cm</span></div></div>
+      <div class="stat col"><div class="k">对照职业选手（eDPI 中位数约 240）</div><div class="v" id="s-band" style="font-size:15px;line-height:1.5;font-weight:700">${proBand(ed).t}</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>虚拟靶场试验</h2>
+    <p class="sub">5 档灵敏度（当前值的 0.7× / 0.85× / 1.0× / 1.15× / 1.3×）各打 ${SENS_N} 个目标，顺序随机。准星按该档灵敏度移动：低档需要更大手部移动、高档轻轻一动就甩很远。每档结束记录命中率、偏差与耗时。</p>
+    <div class="canvas-wrap">
+      <canvas id="sens-canvas" width="960" height="540"></canvas>
+      <div class="canvas-hud">
+        <span>档位 <b id="h-mult">—</b></span><span>目标 <b id="h-tgt">0/${SENS_N}</b></span><span>命中 <b id="h-hit">0</b></span><span id="h-tip">把准星移到目标上点击</span>
+      </div>
+      <div class="overlay" id="sens-overlay">
+        <h4>准备开始</h4>
+        <p>点击「开始测试」后，鼠标在画布内移动准星（按测试档灵敏度），移到目标上点击命中。<br>5 档依次进行，中途可随时重置。</p>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px;align-items:center">
+      <button class="btn" id="btn-start">开始测试</button>
+      <button class="btn ghost sm" id="btn-reset">重置</button>
+      <div style="flex:1"></div>
+      <div id="sens-status" style="color:var(--dim);font-size:13px"></div>
+    </div>
+    <div id="sens-result"></div>
+  </div>`;
+}
+const sensSt={phase:'idle',order:[],idx:-1,mult:1,targets:[],cur:0,hits:0,misses:0,times:[],dists:[],cross:{x:480,y:270},t0:0,results:[],raf:0};
+window.sensSt=sensSt; // 调试句柄
+function boot_sens(){
+  const cv=$('#sens-canvas'); if(!cv) return;
+  const c2d=cv.getContext('2d');
+  const inD=$('#in-dpi'), inS=$('#in-sens');
+  const updCalc=()=>{
+    const p={dpi:+inD.value||800, sens:+inS.value||0.3};
+    $('#s-ed').textContent=fmt(p.dpi*p.sens);
+    $('#s-cm').textContent=fmt(cm360(p.dpi*p.sens));
+    const b=proBand(p.dpi*p.sens); const el=$('#s-band');
+    el.textContent=b.t; el.style.color = b.c==='acc'?'var(--acc)':b.c==='warn'?'var(--warn)':'var(--txt)';
+    S.profile.dpi=p.dpi; S.profile.sens=p.sens; saveProfile();
+  };
+  inD.addEventListener('input',updCalc); inS.addEventListener('input',updCalc);
+  $('#btn-reset').addEventListener('click',()=>{ sensReset(c2d,cv); });
+  $('#btn-start').addEventListener('click',()=>{
+    if(sensSt.phase==='done'){ sensReset(c2d,cv); }
+    if(sensSt.phase==='idle'){
+      sensSt.order=[...SENS_MULTS].sort(()=>Math.random()-0.5);
+      sensSt.idx=-1; sensSt.results=[];
+      nextRound(c2d,cv);
+    } else if(sensSt.phase==='roundEnd'){ nextRound(c2d,cv); }
+  });
+  cv.addEventListener('pointermove',e=>{
+    const r=cv.getBoundingClientRect();
+    const px=(e.clientX-r.left)/r.width*960, py=(e.clientY-r.top)/r.height*540;
+    sensSt.cross.x=clamp(480+(px-480)*sensSt.mult,0,960);
+    sensSt.cross.y=clamp(270+(py-270)*sensSt.mult,0,540);
+  });
+  cv.addEventListener('pointerdown',()=>{
+    if(sensSt.phase!=='run') return;
+    const t=sensSt.targets[sensSt.cur]; if(!t) return;
+    const d=Math.hypot(sensSt.cross.x-t.x,sensSt.cross.y-t.y);
+    sensSt.times.push(performance.now()-sensSt.t0);
+    if(d<=SENS_R){ sensSt.hits++; sensSt.dists.push(d); }
+    else sensSt.misses++;
+    $('#h-hit').textContent=sensSt.hits;
+    sensSt.cur++;
+    if(sensSt.cur>=SENS_N){ endRound(c2d,cv); }
+    else sensSt.t0=performance.now();
+  });
+  sensSt.raf=requestAnimationFrame(()=>drawSens(c2d));
+  drawSens(c2d);
+}
+function nextRound(c2d,cv){
+  sensSt.idx++; const m=sensSt.order[sensSt.idx];
+  sensSt.mult=m; sensSt.targets=genTargets(); sensSt.cur=0; sensSt.hits=0; sensSt.misses=0;
+  sensSt.times=[]; sensSt.dists=[]; sensSt.phase='run'; sensSt.t0=performance.now();
+  $('#h-mult').textContent=m+'×';
+  $('#h-tgt').textContent='0/'+SENS_N; $('#h-hit').textContent='0';
+  $('#sens-overlay').style.display='none';
+  $('#btn-start').disabled=true; $('#btn-start').textContent='测试中…';
+  $('#sens-status').textContent='档位 '+sensSt.idx+'/5 · 当前灵敏度 ×'+m;
+}
+function endRound(c2d,cv){
+  const r={mult:sensSt.mult,hits:sensSt.hits,total:SENS_N,
+    avgT:sensSt.times.length?sensSt.times.reduce((a,b)=>a+b,0)/sensSt.times.length:0,
+    avgD:sensSt.dists.length?sensSt.dists.reduce((a,b)=>a+b,0)/sensSt.dists.length:0};
+  r.score=roundScore(r);
+  sensSt.results.push(r); sensSt.phase='roundEnd';
+  $('#sens-overlay').style.display='flex';
+  $('#sens-overlay').innerHTML=`<h4>档位 ×${r.mult} 完成</h4>
+    <p>命中 ${r.hits}/${SENS_N}（${Math.round(r.hits/SENS_N*100)}%）· 平均偏差 ${fmt(r.avgD)}px · 平均耗时 ${fmt(r.avgT/1000,2)}s<br>本轮得分 <b style="color:var(--acc);font-size:20px">${r.score}</b></p>
+    ${sensSt.idx<4?'<button class="btn" id="ov-next">下一档</button>':'<button class="btn" id="ov-done">查看结果</button>'}`;
+  const b=$('#ov-next,#ov-done');
+  if(b) b.addEventListener('click',()=>{ if(sensSt.idx<4) nextRound(c2d,cv); else finishSens(c2d,cv); });
+  $('#btn-start').disabled=false; $('#btn-start').textContent=sensSt.idx<4?'下一档':'完成';
+  $('#sens-status').textContent='档位 '+(sensSt.idx+1)+'/5 完成';
+}
+function roundScore(r){
+  const hitRate=r.hits/r.total;
+  const norm=clamp(r.avgD/SENS_R,0,1);
+  const tS=r.avgT<800?1:r.avgT<1400?0.65:r.avgT<2200?0.35:0.12;
+  return Math.round((hitRate*60+(1-norm)*25+tS*15)*10)/10;
+}
+function genTargets(){
+  const ts=[];
+  for(let i=0;i<SENS_N;i++){
+    let x=0,y=0,ok=false;
+    for(let k=0;k<40&&!ok;k++){ x=rand(70,890); y=rand(70,470);
+      ok=ts.every(t=>Math.hypot(t.x-x,t.y-y)>90); }
+    ts.push({x,y});
+  }
+  return ts;
+}
+function sensReset(c2d,cv){
+  sensSt.phase='idle'; sensSt.results=[]; sensSt.idx=-1; sensSt.cur=0;
+  $('#h-mult').textContent='—'; $('#h-tgt').textContent='0/'+SENS_N; $('#h-hit').textContent='0';
+  $('#sens-overlay').style.display='flex';
+  $('#sens-overlay').innerHTML='<h4>准备开始</h4><p>点击「开始测试」后，鼠标在画布内移动准星（按测试档灵敏度），移到目标上点击命中。<br>5 档依次进行，中途可随时重置。</p>';
+  $('#btn-start').disabled=false; $('#btn-start').textContent='开始测试';
+  $('#sens-status').textContent=''; $('#sens-result').innerHTML='';
+  sensSt.cross={x:480,y:270};
+}
+function drawSens(c2d){
+  c2d.clearRect(0,0,960,540);
+  c2d.fillStyle='#070B0F'; c2d.fillRect(0,0,960,540);
+  // 网格
+  c2d.strokeStyle='rgba(80,110,140,.10)'; c2d.lineWidth=1;
+  for(let x=0;x<=960;x+=96){ c2d.beginPath(); c2d.moveTo(x,0); c2d.lineTo(x,540); c2d.stroke(); }
+  for(let y=0;y<=540;y+=90){ c2d.beginPath(); c2d.moveTo(0,y); c2d.lineTo(960,y); c2d.stroke(); }
+  // 中心
+  c2d.strokeStyle='rgba(140,160,177,.25)'; c2d.beginPath(); c2d.arc(480,270,40,0,7); c2d.stroke();
+  // 目标
+  const t=sensSt.targets[sensSt.cur];
+  if(t && sensSt.phase==='run'){
+    c2d.fillStyle='rgba(240,169,61,.16)'; c2d.beginPath(); c2d.arc(t.x,t.y,SENS_R+8,0,7); c2d.fill();
+    c2d.strokeStyle='#F0A93D'; c2d.lineWidth=2.5; c2d.beginPath(); c2d.arc(t.x,t.y,SENS_R,0,7); c2d.stroke();
+    c2d.fillStyle='#F0A93D'; c2d.beginPath(); c2d.arc(t.x,t.y,3,0,7); c2d.fill();
+  }
+  // 准星
+  const cx=sensSt.cross.x, cy=sensSt.cross.y;
+  c2d.strokeStyle=sensSt.phase==='run'?'#E5484D':'rgba(229,72,77,.55)'; c2d.lineWidth=2;
+  const g=9;
+  c2d.beginPath(); c2d.moveTo(cx-g,cy); c2d.lineTo(cx-g-5,cy); c2d.moveTo(cx+g,cy); c2d.lineTo(cx+g+5,cy);
+  c2d.moveTo(cx,cy-g); c2d.lineTo(cx,cy-g-5); c2d.moveTo(cx,cy+g); c2d.lineTo(cx,cy+g+5); c2d.stroke();
+  c2d.strokeStyle='rgba(255,255,255,.7)'; c2d.lineWidth=1;
+  c2d.beginPath(); c2d.arc(cx,cy,2.5,0,7); c2d.stroke();
+  if(sensSt.phase==='run') requestAnimationFrame(()=>drawSens(c2d));
+}
+function finishSens(c2d,cv){
+  sensSt.phase='done';
+  $('#sens-overlay').style.display='none';
+  $('#btn-start').disabled=false; $('#btn-start').textContent='重新测试';
+  $('#sens-status').textContent='全部完成';
+  const res=sensSt.results;
+  const best=[...res].sort((a,b)=>b.score-a.score)[0];
+  const curEd=eDPI(S.profile);
+  const recEd=Math.round(curEd*best.mult);
+  const hitOk=res.every(r=>r.hits>=10);
+  let html=`<h3 style="margin-top:18px">测试结果</h3>
+  <div class="bars">${res.map(r=>`
+    <div class="bar-row ${r===best?'best':''}">
+      <span class="nm">×${r.mult}</span>
+      <span class="track"><span class="fill" style="width:${r.score/12*100}%;background:${r===best?'var(--acc)':'var(--info)'}"></span></span>
+      <span class="sc">${r.score}</span>
+    </div>`).join('')}
+  </div>
+  <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">${res.map(r=>`<span class="pill ${r===best?'acc':'info'}">×${r.mult} · ${r.hits}/${SENS_N} 命中 · ${fmt(r.avgD)}px偏差</span>`).join('')}</div>`;
+  if(!hitOk){
+    html+=`<div class="card" style="background:rgba(240,169,61,.08);border-color:rgba(240,169,61,.4);margin-top:14px">
+      <p style="font-size:13.5px;color:var(--warn)">命中率偏低，结果参考价值有限：建议先在靶场练 10 分钟基础定位，或确认没有鼠标加速 / 高延迟后再测一次。</p></div>`;
+  } else {
+    const dir = best.mult<0.95?'建议降低灵敏度（当前偏快，微调难控制）':best.mult>1.05?'建议提高灵敏度（当前偏慢，跟枪吃力）':'当前灵敏度基本合适，微调即可';
+    const recSens800=sensAt(recEd,800), recSens1600=sensAt(recEd,1600), recSens400=sensAt(recEd,400);
+    html+=`<div class="card" style="background:rgba(62,207,142,.06);border-color:rgba(62,207,142,.35);margin-top:14px">
+      <h3 style="color:var(--acc)">推荐方案</h3>
+      <div class="row">
+        <div class="stat col"><div class="k">推荐 eDPI</div><div class="v">${recEd}<span class="u">edpi</span></div><div class="d">当前 ${fmt(curEd)} → ×${best.mult}</div></div>
+        <div class="stat col"><div class="k">等效 360° 距离</div><div class="v">${fmt(cm360(recEd))}<span class="u">cm</span></div><div class="d">职业典型 45–51 cm</div></div>
+        <div class="stat col" style="flex:1 1 260px"><div class="k">换算组合（任选一组）</div>
+          <div style="font-size:14px;font-weight:700;line-height:1.7">400 DPI → 灵敏度 ${fmt(recSens400,3)}<br>800 DPI → 灵敏度 ${fmt(recSens800,3)}<br>1600 DPI → 灵敏度 ${fmt(recSens1600,3)}</div>
+          <div class="d">${dir}</div></div>
+      </div>
+      <p style="font-size:12.5px;color:var(--dim);margin-top:10px">该推荐基于网页端虚拟试验，仅供起步参考；建议进游戏用推荐值打 30 分钟死斗，再做 ±0.02 的微调。</p>
+    </div>`;
+  }
+  $('#sens-result').innerHTML=html;
+  pushHistory({type:'sens', edpi:recEd, mult:best.mult, best:best.score, t:Date.now()});
+}
+/* ==================== 急停训练（无畏契约） ==================== */
+const STOP_N=20, STOP_V=250, STOP_R=32, STOP_ROUNDS=3;
+function viewStop(){
+  return `
+  <div class="card">
+    <h2>急停（Counter-Strafe）训练</h2>
+    <p class="sub">原理：移动中开枪不准，向移动的反方向轻点按键会让角色瞬间停稳。练习 = 目标出现 → 按 A/D 移动接近 → 反向键急停 → 立即射击。共 ${STOP_ROUNDS} 轮，每轮 ${STOP_N} 个目标。</p>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><div class="tx">目标在准星右侧/左侧随机出现，<kbd>A</kbd> 左移 / <kbd>D</kbd> 右移靠近。</div></div>
+      <div class="step"><div class="n">2</div><div class="tx">对准前按下<b>反向键</b>急停（速度瞬间归零）。<small>不按反向键直接松键会有滑步，导致偏差——这就是急停的意义。</small></div></div>
+      <div class="step"><div class="n">3</div><div class="tx"><kbd>空格</kbd> 或 <b>鼠标左键</b> 射击。命中判定范围 32px，越靠中心偏差越小。<small>本训练需要键盘 A/D，请在电脑端使用；手机上可玩灵敏度和 osu 测试。</small></div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="canvas-wrap">
+      <canvas id="stop-canvas" width="960" height="540"></canvas>
+      <div class="canvas-hud"><span>目标 <b id="st-tgt">0/${STOP_N}</b></span><span>命中 <b id="st-hit">0</b></span><span>状态 <b id="st-st">待机</b></span></div>
+      <div class="overlay" id="stop-overlay">
+        <h4>急停训练</h4>
+        <p>点击开始后，用 <kbd>A</kbd> / <kbd>D</kbd> 移动准星，反向键急停，<kbd>空格</kbd> 或鼠标左键射击。<br>共 ${STOP_ROUNDS} 轮 × ${STOP_N} 个目标。</p>
+        <button class="btn" id="st-start">开始训练</button>
+      </div>
+    </div>
+    <div id="stop-result"></div>
+  </div>`;
+}
+const stopSt={phase:'idle',targets:[],cur:0,hits:0,misses:0,x:480,vx:0,held:{a:false,d:false},
+  appearT:0,firstKeyT:null,stopT:null,shotT:null,stopOk:false,naturalT:null,
+  times:[],stops:[],dists:[],rounds:[],roundIdx:0,raf:0,recorded:false};
+window.stopSt=stopSt; // 调试句柄
+function boot_stop(){
+  const cv=$('#stop-canvas'); if(!cv) return;
+  const c2d=cv.getContext('2d');
+  $('#st-start').addEventListener('click',()=>startStopRound(c2d,cv));
+  window.addEventListener('keydown',e=>{
+    const k=e.key.toLowerCase();
+    if(k==='a'||k==='d'){
+      e.preventDefault();
+      if(stopSt.phase!=='run') return;
+      if(k==='a'&&!stopSt.held.a){
+        stopSt.held.a=true;
+        if(stopSt.firstKeyT===null) stopSt.firstKeyT=performance.now();
+        if(stopSt.held.d){ stopKey(c2d,cv); } else { stopSt.vx=-STOP_V; }
+      } else if(k==='d'&&!stopSt.held.d){
+        stopSt.held.d=true;
+        if(stopSt.firstKeyT===null) stopSt.firstKeyT=performance.now();
+        if(stopSt.held.a){ stopKey(c2d,cv); } else { stopSt.vx=STOP_V; }
+      }
+    }
+    if(k===' '||k==='f'){ e.preventDefault(); fire(c2d,cv); }
+  });
+  window.addEventListener('keyup',e=>{
+    const k=e.key.toLowerCase();
+    if(k==='a'){ stopSt.held.a=false; if(!stopSt.held.d&&stopSt.vx===-STOP_V) stopSt.vx=-STOP_V*0.35; }
+    if(k==='d'){ stopSt.held.d=false; if(!stopSt.held.a&&stopSt.vx===STOP_V) stopSt.vx=STOP_V*0.35; }
+  });
+  cv.addEventListener('pointerdown',()=>fire(c2d,cv));
+  stopSt.raf=requestAnimationFrame(()=>tickStop(c2d,cv));
+}
+function stopKey(c2d,cv){
+  if(stopSt.phase!=='run'||stopSt.stopOk) return;
+  stopSt.vx=0; stopSt.stopOk=true; stopSt.stopT=performance.now();
+}
+function fire(c2d,cv){
+  if(stopSt.phase!=='run'||stopSt.shotT) return;
+  stopSt.shotT=performance.now();
+  const t=stopSt.targets[stopSt.cur]; if(!t) return;
+  const d=Math.abs(stopSt.x-t.x);
+  const ok=d<=STOP_R;
+  stopSt.dists.push(d);
+  const stopMs = stopSt.stopOk ? stopSt.stopT-stopSt.firstKeyT : (stopSt.naturalT||stopSt.shotT)-stopSt.firstKeyT;
+  stopSt.stops.push(clamp(stopMs,0,9999));
+  stopSt.times.push(stopSt.shotT-stopSt.appearT);
+  if(ok) stopSt.hits++; else stopSt.misses++;
+  $('#st-hit').textContent=stopSt.hits;
+  stopSt.cur++;
+  if(stopSt.cur>=STOP_N) endStopRound(c2d,cv);
+  else{ stopSt.appearT=performance.now(); stopSt.firstKeyT=null; stopSt.stopT=null; stopSt.shotT=null; stopSt.stopOk=false; stopSt.naturalT=null; $('#st-tgt').textContent=stopSt.cur+'/'+STOP_N; }
+}
+function startStopRound(c2d,cv){
+  stopSt.roundIdx++;
+  stopSt.targets=[];
+  for(let i=0;i<STOP_N;i++){
+    let x=0,ok=false;
+    for(let k=0;k<30&&!ok;k++){ x=rand(90,870); ok=stopSt.targets.every(t=>Math.abs(t.x-x)>110); }
+    stopSt.targets.push({x:Math.round(x)});
+  }
+  stopSt.cur=0; stopSt.hits=0; stopSt.misses=0; stopSt.x=480; stopSt.vx=0;
+  stopSt.held={a:false,d:false}; stopSt.times=[]; stopSt.stops=[]; stopSt.dists=[];
+  stopSt.phase='run'; stopSt.appearT=performance.now(); stopSt.firstKeyT=null;
+  stopSt.stopT=null; stopSt.shotT=null; stopSt.stopOk=false; stopSt.naturalT=null;
+  $('#st-tgt').textContent='0/'+STOP_N; $('#st-hit').textContent='0';
+  $('#st-st').textContent='移动中…';
+  $('#stop-overlay').style.display='none';
+}
+function endStopRound(c2d,cv){
+  const r={hits:stopSt.hits,total:STOP_N,
+    avgT:stopSt.times.reduce((a,b)=>a+b,0)/STOP_N,
+    avgStop:stopSt.stops.reduce((a,b)=>a+b,0)/STOP_N,
+    avgD:stopSt.dists.reduce((a,b)=>a+b,0)/STOP_N};
+  stopSt.rounds.push(r);
+  stopSt.phase='idle';
+  $('#st-st').textContent='轮次结束';
+  $('#stop-overlay').style.display='flex';
+  $('#st-start').textContent = stopSt.roundIdx<STOP_ROUNDS ? '开始第 '+(stopSt.roundIdx+1)+' 轮' : '再练一组';
+  if(stopSt.roundIdx>=STOP_ROUNDS) renderStopResult();
+}
+function tickStop(c2d,cv){
+  const dt=16/1000;
+  if(stopSt.phase==='run'){
+    if(!stopSt.held.a&&!stopSt.held.d&&stopSt.vx!==0){
+      stopSt.vx*=0.85;
+      if(Math.abs(stopSt.vx)<6){ stopSt.vx=0; if(!stopSt.stopOk&&!stopSt.naturalT) stopSt.naturalT=performance.now(); }
+    }
+    stopSt.x=clamp(stopSt.x+stopSt.vx*dt,0,960);
+    const st = stopSt.vx>5?'向右':stopSt.vx<-5?'向左':'停稳';
+    if($('#st-st').textContent!==st) $('#st-st').textContent=st;
+  }
+  drawStop(c2d);
+  requestAnimationFrame(()=>tickStop(c2d,cv));
+}
+function drawStop(c2d){
+  c2d.clearRect(0,0,960,540);
+  c2d.fillStyle='#070B0F'; c2d.fillRect(0,0,960,540);
+  // 地平线
+  c2d.strokeStyle='rgba(80,110,140,.15)'; c2d.lineWidth=1;
+  for(let x=0;x<=960;x+=96){ c2d.beginPath(); c2d.moveTo(x,0); c2d.lineTo(x,540); c2d.stroke(); }
+  c2d.beginPath(); c2d.moveTo(0,270); c2d.lineTo(960,270); c2d.stroke();
+  // 目标（敌人头部）
+  const t=stopSt.targets[stopSt.cur];
+  if(t&&stopSt.phase==='run'){
+    c2d.fillStyle='rgba(229,72,77,.18)'; c2d.beginPath(); c2d.arc(t.x,270,STOP_R+10,0,7); c2d.fill();
+    c2d.strokeStyle='#E5484D'; c2d.lineWidth=2.5; c2d.beginPath(); c2d.arc(t.x,270,STOP_R,0,7); c2d.stroke();
+    c2d.fillStyle='#E5484D'; c2d.beginPath(); c2d.arc(t.x,270,3,0,7); c2d.fill();
+  }
+  // 准星
+  const x=stopSt.x;
+  c2d.strokeStyle='#7BE0B2'; c2d.lineWidth=2;
+  const g=10;
+  c2d.beginPath(); c2d.moveTo(x-g,270); c2d.lineTo(x-g-6,270); c2d.moveTo(x+g,270); c2d.lineTo(x+g+6,270);
+  c2d.moveTo(x,270-g); c2d.lineTo(x,270-g-5); c2d.moveTo(x,270+g); c2d.lineTo(x,270+g+5); c2d.stroke();
+  c2d.fillStyle='rgba(255,255,255,.6)'; c2d.beginPath(); c2d.arc(x,270,2,0,7); c2d.fill();
+}
+function renderStopResult(){
+  const rs=stopSt.rounds;
+  const agg={hits:rs.reduce((a,r)=>a+r.hits,0),total:STOP_ROUNDS*STOP_N,
+    avgStop:rs.reduce((a,r)=>a+r.avgStop,0)/STOP_ROUNDS,
+    avgT:rs.reduce((a,r)=>a+r.avgT,0)/STOP_ROUNDS,
+    avgD:rs.reduce((a,r)=>a+r.avgD,0)/STOP_ROUNDS};
+  const hr=agg.hits/agg.total;
+  let grade,color,advice;
+  if(hr>=0.85&&agg.avgStop<320){ grade='急停熟练'; color='var(--acc)'; advice='急停基本功很扎实。下一步练「急停后的第一发爆头」与移动靶，尝试把 180° 转身急停也纳入练习。'; }
+  else if(hr>=0.7){ grade='基本达标'; color='var(--info)'; advice='命中可以，但停稳耗时还有空间。刻意把「反向键 → 开火」的间隔压到 0.2 秒以内：先停稳再开枪，别边滑边打。'; }
+  else { grade='需要加强'; color='var(--warn)'; advice='先放慢节奏：每轮强迫自己在目标 <b>中心 32px</b> 内才开枪，不中不扣分但必须急停后射击。打 5 轮后再回到计时模式。'; }
+  $('#stop-result').innerHTML=`
+    <div class="bars" style="margin-top:18px">${rs.map((r,i)=>`
+      <div class="bar-row"><span class="nm">第 ${i+1} 轮</span>
+        <span class="track"><span class="fill" style="width:${r.hits/r.total*100}%;background:var(--info)"></span></span>
+        <span class="sc">${r.hits}/${r.total}</span></div>`).join('')}
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div class="stat col"><div class="k">综合命中率</div><div class="v" style="color:${hr>=0.7?'var(--acc)':'var(--warn)'}">${Math.round(hr*100)}<span class="u">%</span></div></div>
+      <div class="stat col"><div class="k">平均停稳耗时</div><div class="v">${fmt(agg.avgStop,0)}<span class="u">ms</span></div><div class="d">从按方向键到急停生效</div></div>
+      <div class="stat col"><div class="k">平均偏差</div><div class="v">${fmt(agg.avgD,0)}<span class="u">px</span></div><div class="d">命中点到目标中心</div></div>
+      <div class="stat col"><div class="k">评级</div><div class="v" style="font-size:20px;color:${color}">${grade}</div></div>
+    </div>
+    <div class="card" style="background:rgba(79,179,217,.06);border-color:rgba(79,179,217,.35);margin-top:14px"><p style="font-size:13.5px">${advice}</p></div>`;
+  if(!stopSt.recorded){
+    pushHistory({type:'stop',hitRate:Math.round(hr*100),avgStop:Math.round(agg.avgStop),t:Date.now()});
+    stopSt.recorded=true;
+  }
+}
+/* ==================== osu! 瞄准测试 ==================== */
+const OSU_MULTS=[0.8,1.0,1.2,1.4];
+const OSU_N=18, OSU_R=34;
+function viewOsu(){
+  const p=S.profile;
+  return `
+  <div class="card">
+    <h2>osu! 瞄准测试</h2>
+    <p class="sub">osu 对灵敏度的要求与 FPS 不同：不需要低敏打枪，关键是「够得着全屏 + 点得准」。这里用 4 档灵敏度（当前值的 0.8× ~ 1.4×）各点 ${OSU_N} 个圆圈，评分参考 osu 的 300/100/50 判定。</p>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><div class="tx">圆圈出现后用鼠标把准星移进圈内点击。<small>内圈（半价半径）命中记 300，中圈 100，外圈 50，圈外 miss。</small></div></div>
+      <div class="step"><div class="n">2</div><div class="tx">测完 4 档后查看推荐档位与换算建议。</div></div>
+      <div class="step"><div class="n">3</div><div class="tx">屏幕覆盖自检：在游戏里用当前设置把准星移到屏幕<b>四角与中心</b>各一次——手腕不别扭、一次够到，就是合适的范围。<small>官方建议开启 Raw Input 绕过系统鼠标加速；多数鼠标玩家使用 400–1000 DPI。</small></div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="canvas-wrap">
+      <canvas id="osu-canvas" width="960" height="540"></canvas>
+      <div class="canvas-hud"><span>档位 <b id="o-mult">—</b></span><span>圆圈 <b id="o-tgt">0/${OSU_N}</b></span><span>得分 <b id="o-score">0</b></span><span id="o-tip">把准星移进圈内点击</span></div>
+      <div class="overlay" id="osu-overlay">
+        <h4>osu! 圆圈测试</h4>
+        <p>点击下方「开始测试」后，鼠标在画布内移动准星，圆圈出现时点击命中。<br>4 档灵敏度依次进行，共 ${OSU_N} 个圆圈/档。</p>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px;align-items:center">
+      <button class="btn osu" id="o-main">开始测试</button>
+      <button class="btn ghost sm" id="o-reset">重置</button>
+      <div style="flex:1"></div>
+      <div id="o-status" style="color:var(--dim);font-size:13px"></div>
+    </div>
+    <div id="osu-result"></div>
+  </div>`;
+}
+const osuSt={phase:'idle',order:[],idx:-1,mult:1,targets:[],cur:0,score:0,notes:[],cross:{x:480,y:270},t0:0,results:[],raf:0};
+window.osuSt=osuSt; // 调试句柄
+function boot_osu(){
+  const cv=$('#osu-canvas'); if(!cv) return;
+  const c2d=cv.getContext('2d');
+  $('#o-main').addEventListener('click',()=>{
+    if(osuSt.phase==='done'){ osuReset(c2d,cv); return; }
+    if(osuSt.phase==='idle'){ osuSt.order=[...OSU_MULTS].sort(()=>Math.random()-0.5); osuSt.idx=-1; osuSt.results=[]; osuNext(c2d,cv); }
+    else if(osuSt.phase==='roundEnd'){
+      if(osuSt.idx>=OSU_MULTS.length-1) osuFinish(c2d,cv);
+      else osuNext(c2d,cv);
+    }
+  });
+  $('#o-reset').addEventListener('click',()=>osuReset(c2d,cv));
+  cv.addEventListener('pointermove',e=>{
+    const r=cv.getBoundingClientRect();
+    const px=(e.clientX-r.left)/r.width*960, py=(e.clientY-r.top)/r.height*540;
+    osuSt.cross.x=clamp(480+(px-480)*osuSt.mult,0,960);
+    osuSt.cross.y=clamp(270+(py-270)*osuSt.mult,0,540);
+  });
+  cv.addEventListener('pointerdown',()=>{
+    if(osuSt.phase!=='run') return;
+    const t=osuSt.targets[osuSt.cur]; if(!t) return;
+    const d=Math.hypot(osuSt.cross.x-t.x,osuSt.cross.y-t.y);
+    let v=0;
+    if(d<=OSU_R*0.5) v=300; else if(d<=OSU_R*0.8) v=100; else if(d<=OSU_R) v=50;
+    osuSt.notes.push({v, t:performance.now()-osuSt.t0, d});
+    osuSt.score+=v;
+    $('#o-score').textContent=osuSt.score;
+    osuSt.cur++;
+    if(osuSt.cur>=OSU_N) osuEnd(c2d,cv);
+    else osuSt.t0=performance.now();
+  });
+  osuSt.raf=requestAnimationFrame(()=>drawOsu(c2d));
+}
+function osuNext(c2d,cv){
+  osuSt.idx++; osuSt.mult=osuSt.order[osuSt.idx];
+  osuSt.targets=[];
+  for(let i=0;i<OSU_N;i++){
+    let x=0,y=0,ok=false;
+    for(let k=0;k<60&&!ok;k++){ x=rand(90,870); y=rand(70,470); ok=osuSt.targets.every(t=>Math.hypot(t.x-x,t.y-y)>110); }
+    osuSt.targets.push({x,y});
+  }
+  osuSt.cur=0; osuSt.score=0; osuSt.notes=[];
+  osuSt.phase='run'; osuSt.t0=performance.now();
+  $('#o-mult').textContent=osuSt.mult+'×';
+  $('#o-tgt').textContent='0/'+OSU_N; $('#o-score').textContent='0';
+  $('#osu-overlay').style.display='none';
+  $('#o-main').disabled=true; $('#o-main').textContent='测试中…';
+  $('#o-status').textContent='档位 '+(osuSt.idx+1)+'/4 · 当前 ×'+osuSt.mult;
+}
+function osuEnd(c2d,cv){
+  const hit=osuSt.notes.filter(n=>n.v>0).length;
+  const avgV=osuSt.notes.length?osuSt.notes.reduce((a,n)=>a+n.v,0)/osuSt.notes.length:0;
+  const avgT=osuSt.notes.length?osuSt.notes.reduce((a,n)=>a+n.t,0)/osuSt.notes.length:0;
+  const acc=avgV/300;
+  const tS=avgT<650?1:avgT<1000?0.65:avgT<1500?0.3:0.1;
+  const score=Math.round((hit/OSU_N*50+acc*30+tS*20)*10)/10;
+  osuSt.results.push({mult:osuSt.mult,hit,total:OSU_N,acc:Math.round(acc*100),avgT,score});
+  osuSt.phase='roundEnd';
+  $('#osu-overlay').style.display='flex';
+  $('#osu-overlay').innerHTML=`<h4>档位 ×${osuSt.mult} 完成</h4>
+    <p>命中 ${hit}/${OSU_N} · 平均判定分 ${fmt(avgV,0)}/300 · 平均反应 ${fmt(avgT,0)}ms<br>本轮得分 <b style="color:var(--osu);font-size:20px">${score}</b></p>
+    <p style="color:var(--dim);font-size:12px">${osuSt.idx<3?'点击下方「下一档」继续':'点击下方「完成」查看结果'}</p>`;
+  $('#o-main').disabled=false; $('#o-main').textContent=osuSt.idx<3?'下一档':'完成';
+  $('#o-status').textContent='档位 '+(osuSt.idx+1)+'/4 完成';
+}
+function osuReset(c2d,cv){
+  osuSt.phase='idle'; osuSt.results=[]; osuSt.idx=-1;
+  $('#o-mult').textContent='—'; $('#o-tgt').textContent='0/'+OSU_N; $('#o-score').textContent='0';
+  $('#osu-overlay').style.display='flex';
+  $('#osu-overlay').innerHTML='<h4>osu! 圆圈测试</h4><p>点击下方「开始测试」后，鼠标在画布内移动准星，圆圈出现时点击命中。<br>4 档灵敏度依次进行。</p>';
+  $('#o-main').disabled=false; $('#o-main').textContent='开始测试';
+  $('#o-status').textContent='';
+  $('#osu-result').innerHTML='';
+  osuSt.cross={x:480,y:270};
+}
+function drawOsu(c2d){
+  c2d.clearRect(0,0,960,540);
+  c2d.fillStyle='#0D0A14'; c2d.fillRect(0,0,960,540);
+  const g=c2d.createRadialGradient(480,270,40,480,270,460);
+  g.addColorStop(0,'rgba(240,108,176,.06)'); g.addColorStop(1,'rgba(240,108,176,0)');
+  c2d.fillStyle=g; c2d.fillRect(0,0,960,540);
+  const t=osuSt.targets[osuSt.cur];
+  if(t&&osuSt.phase==='run'){
+    c2d.strokeStyle='#F06CB0'; c2d.lineWidth=3; c2d.beginPath(); c2d.arc(t.x,t.y,OSU_R,0,7); c2d.stroke();
+    c2d.strokeStyle='rgba(240,108,176,.5)'; c2d.lineWidth=1.5; c2d.beginPath(); c2d.arc(t.x,t.y,OSU_R*0.8,0,7); c2d.stroke();
+    c2d.fillStyle='rgba(240,108,176,.25)'; c2d.beginPath(); c2d.arc(t.x,t.y,OSU_R*0.5,0,7); c2d.fill();
+  }
+  const cx=osuSt.cross.x, cy=osuSt.cross.y;
+  c2d.strokeStyle='rgba(255,255,255,.85)'; c2d.lineWidth=2; c2d.beginPath(); c2d.arc(cx,cy,9,0,7); c2d.stroke();
+  c2d.fillStyle='rgba(255,255,255,.85)'; c2d.beginPath(); c2d.arc(cx,cy,1.8,0,7); c2d.fill();
+  if(osuSt.phase==='run') requestAnimationFrame(()=>drawOsu(c2d));
+}
+function osuFinish(c2d,cv){
+  osuSt.phase='done';
+  $('#osu-overlay').style.display='none';
+  $('#o-main').disabled=false; $('#o-main').textContent='重新测试';
+  $('#o-status').textContent='全部完成';
+  const res=osuSt.results;
+  const best=[...res].sort((a,b)=>b.score-a.score)[0];
+  let html=`<h3 style="margin-top:18px">测试结果</h3>
+  <div class="bars">${res.map(r=>`
+    <div class="bar-row ${r===best?'best':''}">
+      <span class="nm">×${r.mult}</span>
+      <span class="track"><span class="fill" style="width:${r.score/10*100}%;background:${r===best?'var(--acc)':'var(--osu)'}"></span></span>
+      <span class="sc">${r.score}</span>
+    </div>`).join('')}
+  </div>
+  <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">${res.map(r=>`<span class="pill ${r===best?'acc':'osu'}">×${r.mult} · 判定 ${r.acc}% · ${fmt(r.avgT,0)}ms</span>`).join('')}</div>`;
+  const curOsu=S.profile.osuMult||1;
+  const rec=curOsu*best.mult;
+  const dir=best.mult<0.95?'可以适当降低 osu 灵敏度换稳定':best.mult>1.1?'可以适当提高灵敏度扩大覆盖': '当前档位合适';
+  html+=`<div class="card" style="background:rgba(240,108,176,.07);border-color:rgba(240,108,176,.4);margin-top:14px">
+    <h3 style="color:var(--osu)">调参建议</h3>
+    <div class="row">
+      <div class="stat col"><div class="k">推荐灵敏度倍率</div><div class="v">×${fmt(best.mult,2)}</div><div class="d">相对你当前 osu 灵敏度 ${fmt(curOsu,2)}×</div></div>
+      <div class="stat col"><div class="k">换算后的 osu 灵敏度</div><div class="v">${fmt(rec,2)}<span class="u">×</span></div><div class="d">${dir}</div></div>
+      <div class="stat col"><div class="k">覆盖自检结论</div><div class="v" style="font-size:15px;line-height:1.5">${best.mult<=1.2?'四角 + 中心一次够到':'注意手腕/手臂切换'}</div><div class="d">按上面的步骤在游戏里验证</div></div>
+    </div>
+    <p style="font-size:12.5px;color:var(--dim);margin-top:10px">osu 玩家间灵敏度差异极大（有人 400 DPI、有人 1600+），没有唯一正确答案；建议保持 400–1000 DPI + Raw Input，用「覆盖全屏不别扭」作为最终标准。</p>
+  </div>`;
+  $('#osu-result').innerHTML=html;
+  S.profile.osuMult=+fmt(rec,2); saveProfile();
+  pushHistory({type:'osu',mult:best.mult,score:best.score,t:Date.now()});
+}
+/* ==================== 位置 / 角色测试（无畏契约） ==================== */
+const ROLES=[
+  {id:'D',name:'决斗者',cn:'决斗者',color:'#E5484D',desc:'负责撕开防线、拿首杀、为队伍建立人数优势。吃枪法与单兵能力，是队伍里最“秀”的位置。',
+   agents:['Jett','Reyna','Phoenix','Raze','Yoru','Neon','Iso'],
+   tip:'练好急停与爆头线，学习“进点时机”而非无脑冲；死斗/靶场练枪时长建议保持队内最高。'},
+  {id:'I',name:'先锋',cn:'先锋',color:'#4FB3D9',desc:'用闪光、探测、无人机为队伍开路，负责“先手信息”和进点节奏。枪法合格即可，道具熟练度决定上限。',
+   agents:['Sova','Breach','Skye','KAY/O','Fade','Gekko','Tejo'],
+   tip:'把道具使用练成肌肉记忆（闪光角度、探测点位），多复盘进点失败原因——是你没给到信息还是队友没跟。'},
+  {id:'C',name:'控场者',cn:'控场',color:'#9A8CF5',desc:'用烟雾和地图技能控制关键区域、分割战场、决定攻防节奏，往往是隐形指挥。',
+   agents:['Brimstone','Viper','Omen','Astra','Harbor','Clove'],
+   tip:'学习主流烟位点位（一图一烟点图），训练“残局烟+队友补枪”的配合；语音报点比枪法更重要。'},
+  {id:'S',name:'哨兵',cn:'哨兵',color:'#3ECF8E',desc:'守点、布防、保护下包与后路，用道具拖延时间创造人数优势，是团队最后的保险。',
+   agents:['Killjoy','Cypher','Sage','Chamber','Deadlock','Vyse'],
+   tip:'练架枪耐心与信息处理：听到脚步先判断再开枪；把“守点拖延”的时间节奏练出来（拖 15 秒就是胜利）。'},
+];
+const QUIZ=[
+  {q:'队伍开局需要第一个冲进点内建立优势，你的选择？',o:['我第一个冲，拿首杀','先帮队友清点、扔道具掩护','先封烟控视野再进','守在队伍后面断后防绕后']},
+  {q:'残局 1v3，你最想做的事？',o:['主动找人拼枪逐个击破','利用道具和预瞄制造信息差','用烟雾分割战场逐个处理','藏起来拖延时间等敌人犯错']},
+  {q:'你最喜欢哪种对枪风格？',o:['近身快速拉枪','中距离道具配合对枪','长枪位卡角度架枪','卡点架枪守株待兔']},
+  {q:'给队伍选一个你最有把握的职能？',o:['突破手 / 首杀机器','信息收集 / 开局交火引导','地图指挥 / 烟位控制','守点 / 经济管理 / 狙击']},
+  {q:'队友全倒了、包还没下，你的第一反应？',o:['拎枪打进去','丢闪丢雷制造混乱再进','封烟保护下包路线','找安全位置架枪反打']},
+  {q:'你更喜欢哪种地图玩法？',o:['大脚步快节奏，见人就打','侦察敌人动向，预判交火','控制中路 / 关键区域','卡住角落等敌人自投罗网']},
+  {q:'你的击杀数不高但团队赢了，你会觉得？',o:['没意思，我要杀更多','没关系，我的信息和道具很关键','正常，我控制了地图节奏','挺好，我的守点很稳']},
+  {q:'你认为团队里最稀缺的位置是？',o:['敢冲的突破手','会玩的先锋','好的烟位指挥','稳的哨兵 / 狙击']},
+  {q:'遇到满编敌人回防，你更倾向？',o:['直接冲进去打乱阵型','先用道具逼退敌人','封烟分割战场逐个吃掉','架住一条线逐个放倒']},
+  {q:'你心里最认同的一句话？',o:['最好的防守是进攻','信息就是优势','掌控地图就掌控比赛','稳扎稳打，少犯错误']},
+  {q:'打排位你更愿意选？',o:['能秀的角色，手感好就赢','能帮队友的角色','控场角色带节奏','防守型角色求稳']},
+  {q:'你的准度更多体现在？',o:['甩枪 / 爆发式瞄准','预瞄和道具衔接','架点耐心','稳定架枪和补枪']},
+];
+function viewRole(){
+  const done=S.quiz.done;
+  return `
+  <div class="card">
+    <h2>位置测试 · 找到你的主角色</h2>
+    <p class="sub">${QUIZ.length} 道情境题，凭第一直觉作答，测完给出你的主角色与副角色，以及对应特工推荐。选「最接近你想做的」，不是「最像现在的你」。</p>
+    <div id="quiz-box">${done?renderQuizResult():renderQuizQ(0)}</div>
+  </div>`;
+}
+let quizIdx=0;
+function renderQuizQ(i){
+  const q=QUIZ[i];
+  const letters=['A','B','C','D'];
+  return `<div class="steps" style="margin:6px 0 4px">
+    <div class="step"><div class="n">${i+1}</div><div class="tx" style="font-size:16px;font-weight:700">${q.q}<small style="font-weight:400">第 ${i+1} / ${QUIZ.length} 题 · 选择后自动进入下一题</small></div></div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    ${q.o.map((o,j)=>`<button class="btn ghost" style="text-align:left;padding:13px 16px;font-weight:500" data-opt="${j}">
+      <b style="color:var(--faint);margin-right:10px">${letters[j]}</b>${o}</button>`).join('')}
+  </div>
+  <div style="margin-top:16px;color:var(--faint);font-size:12.5px">已答 ${i} / ${QUIZ.length} 题</div>`;
+}
+function boot_role(){
+  const box=$('#quiz-box'); if(!box) return;
+  if(S.quiz.done){ renderQuizResultInto(box); return; }
+  quizIdx=0;
+  box.addEventListener('click',e=>{
+    const b=e.target.closest('button[data-opt]'); if(!b) return;
+    S.quiz.answers[quizIdx]=+b.dataset.opt;
+    quizIdx++;
+    if(quizIdx<QUIZ.length){ box.innerHTML=renderQuizQ(quizIdx); }
+    else finishQuiz(box);
+  });
+}
+function finishQuiz(box){
+  const scores={D:0,I:0,C:0,S:0};
+  Object.values(S.quiz.answers).forEach(opt=>{
+    if(opt===0) scores.D++; else if(opt===1) scores.I++; else if(opt===2) scores.C++; else scores.S++;
+  });
+  const sorted=Object.entries(scores).sort((a,b)=>b[1]-a[1]);
+  S.quiz.result={scores, main:sorted[0][0], sub:sorted[1][0]};
+  S.quiz.done=true;
+  box.innerHTML=renderQuizResult();
+  bindQuizRetry(box);
+  pushHistory({type:'role',main:ROLES.find(r=>r.id===S.quiz.result.main).name,t:Date.now()});
+}
+function renderQuizResult(){
+  const res=S.quiz.result; const R=ROLES;
+  const m=R.find(r=>r.id===res.main), s=R.find(r=>r.id===res.sub);
+  const max=Math.max(...Object.values(res.scores));
+  return `
+  <div class="role-head" style="margin-bottom:14px">
+    <div class="role-icon" style="background:${m.color}22;color:${m.color};box-shadow:inset 0 0 0 1px ${m.color}66">${m.name[0]}</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;color:var(--dim)">你的主角色</div>
+      <div style="font-size:28px;font-weight:900;color:${m.color}">${m.name}</div>
+    </div>
+    <div class="pill ${m.id==='D'?'val':m.id==='I'?'info':m.id==='C'?'warn':'acc'}" style="font-size:13px">副角色倾向：${s.name}</div>
+  </div>
+  <div class="role-meter">
+    ${R.map(r=>{ const sc=res.scores[r.id]; return `
+      <div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:${r.color}">${r.name}</span><b class="num">${sc}/${QUIZ.length}</b></div>
+        <div class="meter"><i style="width:${sc/max*100}%;background:${r.color}"></i></div>
+      </div>`;}).join('')}
+  </div>
+  <div class="card" style="background:${m.color}0D;border-color:${m.color}55;margin-top:14px">
+    <h3 style="color:${m.color}">${m.name} · 定位解读</h3>
+    <p style="font-size:13.5px;color:var(--txt)">${m.desc}</p>
+    <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:12px;color:var(--dim)">推荐特工：</span>
+      ${m.agents.map(a=>`<span class="pill ${m.id==='D'?'val':m.id==='I'?'info':m.id==='C'?'warn':'acc'}">${a}</span>`).join('')}
+    </div>
+    <p style="font-size:12.5px;color:var(--dim);margin-top:10px">训练建议：${m.tip}</p>
+  </div>
+  <div class="card" style="background:${s.color}0D;border-color:${s.color}44;margin-top:12px">
+    <h3 style="color:${s.color}">副角色：${s.name}（备用定位）</h3>
+    <p style="font-size:13px;color:var(--dim)">${s.desc} 推荐 ${s.agents.slice(0,4).join(' / ')}。副角色适合在排位补位时使用。</p>
+  </div>
+  <button class="btn ghost" id="quiz-retry" style="margin-top:14px">重新测试</button>`;
+}
+function bindQuizRetry(box){
+  $('#quiz-retry')?.addEventListener('click',()=>{
+    S.quiz.done=false; S.quiz.answers={}; S.quiz.result=null; quizIdx=0;
+    box.innerHTML=renderQuizQ(0);
+  });
+}
+function renderQuizResultInto(box){
+  box.innerHTML=renderQuizResult();
+  bindQuizRetry(box);
+}
+/* ==================== 报告与历史 ==================== */
+function pushHistory(item){
+  const h=loadHistory();
+  h.unshift(item);
+  saveHistory(h);
+}
+function viewReport(){
+  const h=loadHistory();
+  const lastSens=h.find(x=>x.type==='sens');
+  const lastStop=h.find(x=>x.type==='stop');
+  const lastOsu=h.find(x=>x.type==='osu');
+  const lastRole=h.find(x=>x.type==='role');
+  const role=S.quiz.result?ROLES.find(r=>r.id===S.quiz.result.main):(lastRole?ROLES.find(r=>r.name===lastRole.main):null);
+  const p=S.profile;
+  let body='';
+  if(!h.length){
+    body=`<div class="card"><h3 style="color:var(--dim)">还没有测试记录</h3>
+      <p style="font-size:13.5px;color:var(--dim)">先完成「灵敏度」「急停」「osu」「位置」里的任意测试，这里会自动汇总你的结果与调参方案。</p>
+      <div style="margin-top:12px"><a class="btn" href="#/sens">去测灵敏度</a></div></div>`;
+  } else {
+    body=`<div class="row">
+      <div class="stat col"><div class="k">当前 eDPI</div><div class="v">${fmt(eDPI(p))}</div>
+        ${lastSens?`<div class="d">测试推荐 ${lastSens.edpi}（×${lastSens.mult}）</div>`:''}</div>
+      <div class="stat col"><div class="k">急停最新一轮</div><div class="v">${lastStop?lastStop.hitRate+'%':'—'}<span class="u">命中</span></div>
+        ${lastStop?`<div class="d">平均停稳 ${lastStop.avgStop}ms</div>`:''}</div>
+      <div class="stat col"><div class="k">osu 推荐</div><div class="v">${lastOsu?'×'+fmt(lastOsu.mult,2):'—'}</div>
+        ${lastOsu?`<div class="d">得分 ${lastOsu.score}</div>`:''}</div>
+      <div class="stat col"><div class="k">主角色</div><div class="v" style="font-size:20px;color:${role?role.color:'var(--dim)'}">${role?role.name:'—'}</div>
+        <div class="d">${role?'副倾向 '+ROLES.find(r=>r.id===S.quiz.result?.sub)?.name||'':''}</div></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h2>行动清单</h2>
+      <div class="steps">
+        <div class="step"><div class="n">1</div><div class="tx">${lastSens?`把无畏契约灵敏度改为 <b>${lastSens.edpi} eDPI</b>（800 DPI → ${fmt(sensAt(lastSens.edpi,800),3)}；1600 DPI → ${fmt(sensAt(lastSens.edpi,1600),3)}），进靶场热身 10 分钟后打一局死斗感受。`:'先完成灵敏度测试获取推荐值。'}</div></div>
+        <div class="step"><div class="n">2</div><div class="tx">${lastStop?`急停评级已记录（命中 ${lastStop.hitRate}%）。每天 10 分钟急停专项，目标：命中率 ≥85%、停稳 ≤300ms。`:'完成急停训练建立基线，再谈提升。'}</div></div>
+        <div class="step"><div class="n">3</div><div class="tx">${lastOsu?`osu 灵敏度建议为当前 ×${fmt(lastOsu.mult,2)}；保持 Raw Input 开启，用「覆盖全屏不别扭」做最终校验。`:'完成 osu 测试获取推荐倍率。'}</div></div>
+        <div class="step"><div class="n">4</div><div class="tx">${role?`主角色确定为 <b>${role.name}</b>，从推荐特工 ${role.agents.slice(0,3).join(' / ')} 里选 1 个专精 2 周。`:'完成位置测试，明确专精方向。'}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>训练计划建议（每周）</h2>
+      <table><colgroup><col style="width:16%"><col style="width:44%"><col style="width:40%"></colgroup>
+        <thead><tr><th>时间</th><th>内容</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>每天 10 分钟</td><td>急停专项（本工具）</td><td>先停稳再开枪，压缩停稳时间</td></tr>
+          <tr><td>每天 15 分钟</td><td>靶场死斗 / 基础枪</td><td>爆头线、预瞄、转身</td></tr>
+          <tr><td>每周 3 次</td><td>灵敏度微调复测</td><td>改灵敏度后 3 天再复测一次</td></tr>
+          <tr><td>每周 2 次</td><td>osu 圆圈测试</td><td>练跟枪与小范围微调</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:12.5px;color:var(--faint);margin-top:8px">训练量适度，避免手腕疲劳；高灵敏度手腕流玩家更要注意劳损风险。</p>
+    </div>`;
+  }
+  const hist=h.length?`<div class="card"><h2>历史记录</h2>
+    ${h.map(x=>{
+      let txt='';
+      if(x.type==='sens') txt=`灵敏度 → 推荐 ${x.edpi} eDPI（×${x.mult}）· 得分 ${x.best}`;
+      if(x.type==='stop') txt=`急停 → 命中 ${x.hitRate}% · 停稳 ${x.avgStop}ms`;
+      if(x.type==='osu') txt=`osu → 推荐 ×${x.mult} · 得分 ${x.score}`;
+      if(x.type==='role') txt=`位置 → 主角色 ${x.main}`;
+      return `<div class="hist-item"><span class="pill ${x.type==='sens'?'val':x.type==='stop'?'info':x.type==='osu'?'osu':'acc'}">${{sens:'灵敏度',stop:'急停',osu:'osu',role:'位置'}[x.type]}</span><span>${txt}</span><span style="color:var(--faint);font-size:12px;margin-left:auto">${new Date(x.t).toLocaleDateString()} ${new Date(x.t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span></div>`;
+    }).join('')}
+    <button class="btn ghost sm" id="hist-clear" style="margin-top:8px">清空记录</button></div>`:'';
+  return body+hist;
+}
+function boot_report(){
+  $('#hist-clear')?.addEventListener('click',()=>{ saveHistory([]); toast('已清空本机记录'); route(); });
+}
+/* ==================== 参考资料 ==================== */
+const REFS=[
+  ['ProConfig','What eDPI Do Valorant Pros Use?（无畏契约职业选手 eDPI 分布统计）','https://proconfig.net/stats/valorant-edpi-distribution/','职业 eDPI 中位数约 240，最集中的区间为 150–199。'],
+  ['esportsmice','Valorant 灵敏度统计（570+ 职业选手）','https://esportsmice.com/games/valorant','职业平均 eDPI 约 251、中位数 240。'],
+  ['Setup.gg','Best VALORANT Sensitivity (2026)：800/1600 DPI & eDPI','https://www.setup.gg/game/valorant/best-sens/','668 名职业选手统计：平均 248.3、中位数 231.2，建议以 200–280 区间为起点。'],
+  ['VLR.gg','The Holy Grail of VALORANT Sens: Myth or Reality?','https://www.vlr.gg/358356/the-holy-grail-of-valorant-sens-myth-or-reality','示例职业选手 eDPI：Oxy 184 / yay 280 / cNed 304 / ShahZaM 400。'],
+  ['UltimateMove','Valorant eDPI Calculator – 与职业选手对比','https://ultimatemove.eu/en/valorant-edpi-calculator/','职业典型范围 250–320 eDPI、中位约 267，约 45 cm/360°；约 85% 职业选手使用 400 或 800 DPI。'],
+  ['osu! wiki','Mouse（osu! 官方输入设备说明）','https://osu2.preview.roanh.dev/wiki/en/Gameplay/Input_device/Mouse','Raw Input 绕过系统鼠标加速，Windows 7+ 上自定义灵敏度需开启。'],
+  ['Liquipedia osu!','List of player mouse settings','https://liquipedia.net/osu/List_of_player_mouse_settings','鼠标玩家示例：ASecretBox 使用 800 DPI × 0.9 灵敏度。'],
+  ['DCProSens','Mouse Grip Styles: Palm vs Claw vs Fingertip','https://dcprosens.com/blog/mouse-grip-style-guide-palm-claw-fingertip/','建议现代传感器使用 800 或 1600 DPI，避开传感器平滑区域。'],
+];
+function viewRefs(){
+  return `<div class="card">
+    <h2>参考资料与数据来源</h2>
+    <p class="sub">本工具内的职业选手数据、换算公式与训练建议来源如下（GB/T 7714 著录格式）。访问时间：2026-09-25。</p>
+    <div class="refs">
+      ${REFS.map((r,i)=>`<div class="ref-item"><b>[${i+1}] ${r[0]}. ${r[1]}[EB/OL]. <a href="${r[2]}" target="_blank" rel="noopener">${r[2]}</a>, 2026.</b>${r[3]}</div>`).join('')}
+    </div>
+  </div>
+  <div class="card">
+    <h2>公式与口径说明</h2>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><div class="tx"><b>eDPI = DPI × 游戏内灵敏度</b><small>跨 DPI 比较灵敏度的标准口径，游戏设置本身无关。</small></div></div>
+      <div class="step"><div class="n">2</div><div class="tx"><b>cm/360° = 360 ÷ (0.07 × eDPI) × 2.54</b><small>无畏契约的 yaw 值为 0.07，即每鼠标计数旋转 0.07°；据此把 eDPI 换算为物理转身距离。</small></div></div>
+      <div class="step"><div class="n">3</div><div class="tx"><b>虚拟靶场原理</b><small>网页内以「准星位置 = 画布中心 + (鼠标偏移 × 档位倍率)」模拟不同灵敏度的手感差异，用于相对比较，不能替代游戏内实测。</small></div></div>
+      <div class="step"><div class="n">4</div><div class="tx"><b>急停与角色定位建议</b><small>基于 FPS 训练常识与无畏契约角色职能设定整理，属于训练领域共识而非官方数据。</small></div></div>
+    </div>
+    <p style="font-size:12.5px;color:var(--faint);margin-top:6px">测试结论均为参考值：灵敏度最终以个人手感为准，建议改动后打 3 局以上再下结论。</p>
+  </div>`;
+}
+route(); // 初始路由：须在所有视图模块与常量声明之后执行
+</script>
+</body>
+</html>
