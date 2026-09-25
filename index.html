@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>瞄准工坊 · 灵敏度测试与训练</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23E5484D' stroke-width='2'/%3E%3Cpath d='M12 3v18M3 12h18' stroke='%23E5484D' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='2' fill='%23E5484D'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" media="print" onload="this.media='all'">
 <style>
 :root{
   --bg:#0B1015; --bg2:#0E161F; --card:#121A24; --card2:#17222E;
@@ -49,9 +49,12 @@ nav.tabs a .dot{display:inline-block;width:6px;height:6px;border-radius:50%;marg
 .row{display:flex;flex-wrap:wrap;gap:12px}
 .col{flex:1 1 220px;min-width:0}
 .stat{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.stat.click{cursor:pointer;transition:border-color .15s,background .15s}
+.stat.click:hover{border-color:var(--line2);background:var(--card2)}
 .stat .k{font-size:12px;color:var(--dim)}
 .stat .v{font-size:26px;font-weight:900;letter-spacing:.5px}
 .stat .u{font-size:13px;color:var(--faint);margin-left:2px}
+body.hc canvas{cursor:none}
 .stat .d{font-size:12px;color:var(--acc);margin-top:2px}
 .stat .d.bad{color:var(--warn)}
 /* ===== 按钮 ===== */
@@ -159,6 +162,10 @@ table td b{color:var(--txt)}
   font-size:14px;opacity:0;pointer-events:none;transition:.25s;max-width:88vw;box-shadow:0 8px 30px rgba(0,0,0,.4);
 }
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* ===== 环境提示条 ===== */
+#envbar{display:none;background:rgba(240,169,61,.12);border-bottom:1px solid rgba(240,169,61,.4);
+  color:#FFC46B;font-size:13px;padding:8px 14px;text-align:center;line-height:1.5}
+#envbar.show{display:block}
 kbd{
   display:inline-block;background:var(--card2);border:1px solid var(--line2);border-bottom-width:2px;
   border-radius:6px;padding:1px 7px;font-size:12.5px;font-family:inherit;color:var(--txt);
@@ -182,6 +189,7 @@ kbd{
 </style>
 </head>
 <body>
+<div id="envbar"></div>
 <div id="app">
   <header class="top">
     <div class="brand">
@@ -195,7 +203,7 @@ kbd{
   </header>
   <main id="view"></main>
   <footer style="text-align:center;color:var(--faint);font-size:12px;padding:18px 0 8px">
-    瞄准工坊 · 网页端训练工具，测试结果仅供个人参考，最终以实战手感为准
+    瞄准工坊 v1.0.1 · 测试结果仅供个人参考，最终以实战手感为准
   </footer>
 </div>
 <div id="toast"></div>
@@ -208,6 +216,25 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const rand=(a,b)=>a+Math.random()*(b-a);
 const now=()=>performance.now();
 function fmt(n,d=1){ return (+n).toFixed(d); }
+/* 画布输入兼容层：优先 PointerEvent，旧浏览器回退到 mouse + touch */
+function bindCanvasPointer(cv,{move,down}){
+  const usePE = typeof window.PointerEvent === 'function';
+  const toLocal=(e)=>{ const r=cv.getBoundingClientRect();
+    return { x:(e.clientX-r.left)/r.width*960, y:(e.clientY-r.top)/r.height*540 }; };
+  if(usePE){
+    if(move) cv.addEventListener('pointermove',e=>move(toLocal(e)));
+    if(down) cv.addEventListener('pointerdown',e=>down(toLocal(e)));
+  }else{
+    if(move){
+      cv.addEventListener('mousemove',e=>move(toLocal(e)));
+      cv.addEventListener('touchmove',e=>{ e.preventDefault(); const t=e.touches[0]; if(t) move(toLocal(t)); },{passive:false});
+    }
+    if(down){
+      cv.addEventListener('mousedown',e=>down(toLocal(e)));
+      cv.addEventListener('touchstart',e=>{ e.preventDefault(); const t=e.touches[0]; if(t) down(toLocal(t)); },{passive:false});
+    }
+  }
+}
 function toast(msg){
   const t=$('#toast'); t.textContent=msg; t.classList.add('show');
   clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2600);
@@ -215,11 +242,21 @@ function toast(msg){
 const S = {
   page:'home',
   profile: loadProfile(),
+  hc: (function(){ try{ return localStorage.getItem('aimlab.hc')!=='0'; }catch(e){ return true; } })(),
   sens:{ current:null, rounds:[], done:false },
   stop:{ rounds:[], running:false },
   osu:{ rounds:[], done:false },
   quiz:{ answers:{}, done:false, result:null },
 };
+function applyHC(){
+  document.body.classList.toggle('hc', S.hc);
+  const v=$('#hc-val'); if(v) v.textContent = S.hc?'开':'关';
+}
+function toggleHC(){
+  S.hc=!S.hc;
+  try{ localStorage.setItem('aimlab.hc', S.hc?'1':'0'); }catch(e){}
+  applyHC();
+}
 function loadProfile(){
   try{ const p=JSON.parse(localStorage.getItem('aimlab.profile')||'{}');
     return { dpi:+p.dpi||800, sens:+p.sens||0.3, osuMult:+p.osuMult||1.0, name:p.name||'' }; }
@@ -263,8 +300,21 @@ function route(){
   const fn = {home:viewHome, sens:viewSens, stop:viewStop, osu:viewOsu, role:viewRole, report:viewReport, refs:viewRefs}[S.page];
   v.innerHTML = fn ? fn() : viewHome();
   (fn&&window['boot_'+S.page]) ? window['boot_'+S.page]() : 0;
+  if(S.page==='home'){ const hc=$('#hc-stat'); if(hc) hc.addEventListener('click', toggleHC); }
   window.scrollTo({top:0});
 }
+applyHC();
+/* 运行环境提示：本地 file:// 或嵌入预览容器时给出指引（不影响功能） */
+(function(){
+  const b=document.getElementById('envbar'); if(!b) return;
+  if(location.protocol==='file:'){
+    b.textContent='本地文件模式：若功能按钮无响应，请右键文件 → 打开方式 → 选择 Chrome 或 Edge 直接打开；或部署到 GitHub Pages 在线使用（推荐）。';
+    b.classList.add('show');
+  } else if(self!==top){
+    b.textContent='页面运行在预览容器中，交互功能可能受限；建议直接浏览器打开或部署在线使用。';
+    b.classList.add('show');
+  }
+})();
 window.addEventListener('hashchange', route);
 
 /* ==================== 首页 ==================== */
@@ -282,6 +332,8 @@ function viewHome(){
       <div class="d">职业典型约 45–51 cm</div></div>
     <div class="stat"><div class="k">已完成测试</div><div class="v">${loadHistory().length}<span class="u">次</span></div>
       <div class="d">记录保存在本机</div></div>
+    <div class="stat click" id="hc-stat"><div class="k">测试中隐藏鼠标</div><div class="v"><span id="hc-val">${S.hc?'开':'关'}</span></div>
+      <div class="d">画布内隐藏光标，准星代替鼠标 · 点击切换</div></div>
   </div>
   <div class="grid-cards">
     <a class="gcard" href="#/sens"><div class="ic" style="background:rgba(229,72,77,.14)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="var(--val)" stroke-width="1.8"/><path d="M12 4v16M4 12h16" stroke="var(--val)" stroke-width="1.4"/><circle cx="12" cy="12" r="1.6" fill="var(--val)"/></svg></div>
@@ -370,30 +422,28 @@ function boot_sens(){
       nextRound(c2d,cv);
     } else if(sensSt.phase==='roundEnd'){ nextRound(c2d,cv); }
   });
-  cv.addEventListener('pointermove',e=>{
-    const r=cv.getBoundingClientRect();
-    const px=(e.clientX-r.left)/r.width*960, py=(e.clientY-r.top)/r.height*540;
-    sensSt.cross.x=clamp(480+(px-480)*sensSt.mult,0,960);
-    sensSt.cross.y=clamp(270+(py-270)*sensSt.mult,0,540);
-  });
-  cv.addEventListener('pointerdown',()=>{
-    if(sensSt.phase!=='run') return;
-    const t=sensSt.targets[sensSt.cur]; if(!t) return;
-    const d=Math.hypot(sensSt.cross.x-t.x,sensSt.cross.y-t.y);
-    sensSt.times.push(performance.now()-sensSt.t0);
-    if(d<=SENS_R){ sensSt.hits++; sensSt.dists.push(d); }
-    else sensSt.misses++;
-    $('#h-hit').textContent=sensSt.hits;
-    sensSt.cur++;
-    if(sensSt.cur>=SENS_N){ endRound(c2d,cv); }
-    else sensSt.t0=performance.now();
+  bindCanvasPointer(cv,{
+    move:(p)=>{ sensSt.cross.x=clamp(480+(p.x-480)*sensSt.mult,0,960);
+      sensSt.cross.y=clamp(270+(p.y-270)*sensSt.mult,0,540); },
+    down:()=>{
+      if(sensSt.phase!=='run') return;
+      const t=sensSt.targets[sensSt.cur]; if(!t) return;
+      const d=Math.hypot(sensSt.cross.x-t.x,sensSt.cross.y-t.y);
+      sensSt.times.push(performance.now()-sensSt.t0);
+      if(d<=SENS_R){ sensSt.hits++; sensSt.dists.push(d); }
+      else sensSt.misses++;
+      $('#h-hit').textContent=sensSt.hits;
+      sensSt.cur++;
+      if(sensSt.cur>=SENS_N){ endRound(c2d,cv); }
+      else sensSt.t0=performance.now();
+    }
   });
   sensSt.raf=requestAnimationFrame(()=>drawSens(c2d));
   drawSens(c2d);
 }
 function nextRound(c2d,cv){
   sensSt.idx++; const m=sensSt.order[sensSt.idx];
-  sensSt.mult=m; sensSt.targets=genTargets(); sensSt.cur=0; sensSt.hits=0; sensSt.misses=0;
+  sensSt.mult=m; sensSt.targets=genTargets(m); sensSt.cur=0; sensSt.hits=0; sensSt.misses=0;
   sensSt.times=[]; sensSt.dists=[]; sensSt.phase='run'; sensSt.t0=performance.now();
   $('#h-mult').textContent=m+'×';
   $('#h-tgt').textContent='0/'+SENS_N; $('#h-hit').textContent='0';
@@ -422,11 +472,14 @@ function roundScore(r){
   const tS=r.avgT<800?1:r.avgT<1400?0.65:r.avgT<2200?0.35:0.12;
   return Math.round((hitRate*60+(1-norm)*25+tS*15)*10)/10;
 }
-function genTargets(){
+function genTargets(mult){
+  // 目标只生成在当前灵敏度档位准星可达范围内：准星范围 = 中心 ± 中心距×mult（并 clamp 进画布留边）
+  const x0=Math.max(60, 480-480*mult+45), x1=Math.min(900, 480+480*mult-45);
+  const y0=Math.max(40, 270-270*mult+45), y1=Math.min(500, 270+270*mult-45);
   const ts=[];
   for(let i=0;i<SENS_N;i++){
     let x=0,y=0,ok=false;
-    for(let k=0;k<40&&!ok;k++){ x=rand(70,890); y=rand(70,470);
+    for(let k=0;k<40&&!ok;k++){ x=rand(x0,x1); y=rand(y0,y1);
       ok=ts.every(t=>Math.hypot(t.x-x,t.y-y)>90); }
     ts.push({x,y});
   }
@@ -465,7 +518,7 @@ function drawSens(c2d){
   c2d.moveTo(cx,cy-g); c2d.lineTo(cx,cy-g-5); c2d.moveTo(cx,cy+g); c2d.lineTo(cx,cy+g+5); c2d.stroke();
   c2d.strokeStyle='rgba(255,255,255,.7)'; c2d.lineWidth=1;
   c2d.beginPath(); c2d.arc(cx,cy,2.5,0,7); c2d.stroke();
-  if(sensSt.phase==='run') requestAnimationFrame(()=>drawSens(c2d));
+  requestAnimationFrame(()=>drawSens(c2d)); // 持续重绘：保证开始后画面立即更新
 }
 function finishSens(c2d,cv){
   sensSt.phase='done';
@@ -563,11 +616,12 @@ function boot_stop(){
     if(k==='a'){ stopSt.held.a=false; if(!stopSt.held.d&&stopSt.vx===-STOP_V) stopSt.vx=-STOP_V*0.35; }
     if(k==='d'){ stopSt.held.d=false; if(!stopSt.held.a&&stopSt.vx===STOP_V) stopSt.vx=STOP_V*0.35; }
   });
-  cv.addEventListener('pointerdown',()=>fire(c2d,cv));
+  bindCanvasPointer(cv,{ down:()=>fire(c2d,cv) });
   stopSt.raf=requestAnimationFrame(()=>tickStop(c2d,cv));
 }
 function stopKey(c2d,cv){
-  if(stopSt.phase!=='run'||stopSt.stopOk) return;
+  // 反向键急停：允许同一目标内多次急停（松开再按、或再次反向），每次更新停稳时间
+  if(stopSt.phase!=='run') return;
   stopSt.vx=0; stopSt.stopOk=true; stopSt.stopT=performance.now();
 }
 function fire(c2d,cv){
@@ -726,33 +780,34 @@ function boot_osu(){
     }
   });
   $('#o-reset').addEventListener('click',()=>osuReset(c2d,cv));
-  cv.addEventListener('pointermove',e=>{
-    const r=cv.getBoundingClientRect();
-    const px=(e.clientX-r.left)/r.width*960, py=(e.clientY-r.top)/r.height*540;
-    osuSt.cross.x=clamp(480+(px-480)*osuSt.mult,0,960);
-    osuSt.cross.y=clamp(270+(py-270)*osuSt.mult,0,540);
-  });
-  cv.addEventListener('pointerdown',()=>{
-    if(osuSt.phase!=='run') return;
-    const t=osuSt.targets[osuSt.cur]; if(!t) return;
-    const d=Math.hypot(osuSt.cross.x-t.x,osuSt.cross.y-t.y);
-    let v=0;
-    if(d<=OSU_R*0.5) v=300; else if(d<=OSU_R*0.8) v=100; else if(d<=OSU_R) v=50;
-    osuSt.notes.push({v, t:performance.now()-osuSt.t0, d});
-    osuSt.score+=v;
-    $('#o-score').textContent=osuSt.score;
-    osuSt.cur++;
-    if(osuSt.cur>=OSU_N) osuEnd(c2d,cv);
-    else osuSt.t0=performance.now();
+  bindCanvasPointer(cv,{
+    move:(p)=>{ osuSt.cross.x=clamp(480+(p.x-480)*osuSt.mult,0,960);
+      osuSt.cross.y=clamp(270+(p.y-270)*osuSt.mult,0,540); },
+    down:()=>{
+      if(osuSt.phase!=='run') return;
+      const t=osuSt.targets[osuSt.cur]; if(!t) return;
+      const d=Math.hypot(osuSt.cross.x-t.x,osuSt.cross.y-t.y);
+      let v=0;
+      if(d<=OSU_R*0.5) v=300; else if(d<=OSU_R*0.8) v=100; else if(d<=OSU_R) v=50;
+      osuSt.notes.push({v, t:performance.now()-osuSt.t0, d});
+      osuSt.score+=v;
+      $('#o-score').textContent=osuSt.score;
+      osuSt.cur++;
+      if(osuSt.cur>=OSU_N) osuEnd(c2d,cv);
+      else osuSt.t0=performance.now();
+    }
   });
   osuSt.raf=requestAnimationFrame(()=>drawOsu(c2d));
 }
 function osuNext(c2d,cv){
   osuSt.idx++; osuSt.mult=osuSt.order[osuSt.idx];
   osuSt.targets=[];
+  // osu 目标同样限制在当前灵敏度倍率可达范围内
+  const ox0=Math.max(60, 480-480*osuSt.mult+50), ox1=Math.min(900, 480+480*osuSt.mult-50);
+  const oy0=Math.max(40, 270-270*osuSt.mult+50), oy1=Math.min(500, 270+270*osuSt.mult-50);
   for(let i=0;i<OSU_N;i++){
     let x=0,y=0,ok=false;
-    for(let k=0;k<60&&!ok;k++){ x=rand(90,870); y=rand(70,470); ok=osuSt.targets.every(t=>Math.hypot(t.x-x,t.y-y)>110); }
+    for(let k=0;k<60&&!ok;k++){ x=rand(ox0,ox1); y=rand(oy0,oy1); ok=osuSt.targets.every(t=>Math.hypot(t.x-x,t.y-y)>110); }
     osuSt.targets.push({x,y});
   }
   osuSt.cur=0; osuSt.score=0; osuSt.notes=[];
@@ -804,7 +859,7 @@ function drawOsu(c2d){
   const cx=osuSt.cross.x, cy=osuSt.cross.y;
   c2d.strokeStyle='rgba(255,255,255,.85)'; c2d.lineWidth=2; c2d.beginPath(); c2d.arc(cx,cy,9,0,7); c2d.stroke();
   c2d.fillStyle='rgba(255,255,255,.85)'; c2d.beginPath(); c2d.arc(cx,cy,1.8,0,7); c2d.fill();
-  if(osuSt.phase==='run') requestAnimationFrame(()=>drawOsu(c2d));
+  requestAnimationFrame(()=>drawOsu(c2d)); // 持续重绘：保证开始后画面立即更新
 }
 function osuFinish(c2d,cv){
   osuSt.phase='done';
